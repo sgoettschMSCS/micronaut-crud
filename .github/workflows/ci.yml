@@ -13,19 +13,14 @@ jobs:
     runs-on: ubuntu-latest
 
     services:
-      db:
-        image: postgres:latest
+      mysql:
+        image: mysql:latest
         ports:
-          - 5432:5432
+          - 3306:3306
         env:
-          POSTGRES_DB: micronautdb
-          POSTGRES_USER: micronautuser
-          POSTGRES_PASSWORD: ${{ secrets.DB_PASSWORD }}
-        options: >-
-          --health-cmd "pg_isready -U ${{ secrets.DB_USER }}" 
-          --health-interval 10s 
-          --health-timeout 5s 
-          --health-retries 5
+          MYSQL_ALLOW_EMPTY_PASSWORD: "yes"  # Allows login without a password
+          MYSQL_DATABASE: micronautdb
+          MYSQL_ROOT_HOST: "%"  # Allows root user to connect remotely
 
     steps:
       - name: Checkout repository
@@ -37,15 +32,18 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Wait for PostgreSQL to be ready
+      - name: Wait for MySQL to be ready
         run: |
-          until pg_isready -h localhost -p 5432 -U ${{ secrets.DB_USER }}; do
-            echo "Waiting for PostgreSQL..."
-            sleep 5
+          echo "Waiting for MySQL to start..."
+          for i in {1..30}; do
+            if mysqladmin ping -h 127.0.0.1 --silent; then
+              echo "MySQL is ready!"
+              exit 0
+            fi
+            echo "Still waiting..."
+            sleep 2
           done
-
-      - name: Run Flyway migrations
-        run: ./gradlew flywayMigrate
+          echo "MySQL did not start in time" && exit 1
 
       - name: Build with Gradle
         run: ./gradlew build
